@@ -61,6 +61,7 @@ function loadFromDB() {
                 dataStatus.textContent = `Datos Cargados (${globalData.length} filas)`;
                 dataStatus.className = 'status-badge loaded';
                 document.getElementById('btnClearData').classList.remove('hidden');
+                document.getElementById('btnExportRemote').classList.remove('hidden');
                 uploadOverlay.classList.add('hidden');
                 views[currentView].classList.remove('hidden');
                 renderDashboard();
@@ -71,6 +72,7 @@ function loadFromDB() {
 
 document.addEventListener('DOMContentLoaded', () => {
     loadFromDB();
+    checkRemoteData(); // Nueva función para buscar datos en la nube
     const btnClear = document.getElementById('btnClearData');
     if (btnClear) {
         btnClear.addEventListener('click', () => {
@@ -95,7 +97,58 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    const btnExport = document.getElementById('btnExportRemote');
+    if (btnExport) {
+        btnExport.addEventListener('click', exportDataForMobile);
+    }
 });
+
+// Nueva función para buscar datos en el servidor (GitHub Pages)
+async function checkRemoteData() {
+    try {
+        const response = await fetch('./data.json?t=' + new Date().getTime()); // Evitar caché
+        if (response.ok) {
+            const remoteData = await response.json();
+            if (remoteData && remoteData.length > 0) {
+                console.log('Datos remotos encontrados:', remoteData.length);
+                // Si encontramos datos remotos, los usamos y limpiamos IndexedDB para evitar conflictos
+                rawGlobalData = remoteData;
+                globalData = [...rawGlobalData];
+                updateMonthFilter();
+                dataStatus.textContent = `Datos Sincronizados (${globalData.length} filas)`;
+                dataStatus.className = 'status-badge loaded';
+                uploadOverlay.classList.add('hidden');
+                document.getElementById('btnClearData').classList.remove('hidden');
+                document.getElementById('btnExportRemote').classList.remove('hidden');
+                views[currentView].classList.remove('hidden');
+                renderDashboard();
+                saveToDB(rawGlobalData);
+            }
+        }
+    } catch (err) {
+        console.log('No hay datos remotos o error al cargarlos:', err);
+    }
+}
+
+// Nueva función para exportar datos procesados a JSON
+function exportDataForMobile() {
+    if (rawGlobalData.length === 0) return;
+    
+    const dataStr = JSON.stringify(rawGlobalData);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'data.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    alert('Archivo data.json descargado. Súbelo a tu repositorio de GitHub para actualizar a los comerciales.');
+}
 
 // DOM Elements
 const fileInput = document.getElementById('fileInput');
@@ -279,6 +332,7 @@ function processExcel(data) {
         dataStatus.textContent = `Datos Cargados (${globalData.length} filas)`;
         dataStatus.className = 'status-badge loaded';
         document.getElementById('btnClearData').classList.remove('hidden');
+        document.getElementById('btnExportRemote').classList.remove('hidden');
         
         uploadOverlay.classList.add('hidden');
         views[currentView].classList.remove('hidden');
