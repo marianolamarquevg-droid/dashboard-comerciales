@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Dashboard de Análisis de Ventas</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#22c55e">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Vía Comerciales">
+    <link rel="apple-touch-icon" href="logo_raw.png">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- SheetJS for Excel parsing -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+    <!-- Chart.js for charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <img src="logo_raw.png" alt="Logo Vía" class="app-logo">
+                <span>Panel de Ventas</span>
+            </div>
+            <nav>
+                <a href="#" class="active" data-view="dashboard"><i data-lucide="layout-dashboard"></i> Dashboard</a>
+                <a href="#" data-view="client-search"><i data-lucide="users"></i> Buscar Cliente</a>
+                <a href="#" data-view="route"><i data-lucide="map"></i> Análisis por Ruta</a>
+            </nav>
+            <div class="sidebar-bottom">
+                <div class="upload-btn-wrapper">
+                    <button class="btn-upload"><i data-lucide="upload"></i> Cargar Excel</button>
+                    <input type="file" id="fileInput" accept=".xlsx, .xls, .csv" />
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <div>
+                    <h1>Resumen de Ventas</h1>
+                    <p class="subtitle">Análisis de rutas Sur 1, Sur 2 y Valles</p>
+                </div>
+                <div class="header-actions" style="display: flex; align-items: center; gap: 1rem;">
+                    <select id="vendedorFilter" class="hidden" style="padding: 0.5rem 1rem; background: var(--bg-surface); color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: inherit;">
+                        <option value="ALL">Todos los Vendedores</option>
+                    </select>
+                    <select id="monthFilter" class="hidden" style="padding: 0.5rem 1rem; background: var(--bg-surface); color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: inherit;">
+                        <option value="ALL">Todos los Meses</option>
+                    </select>
+                    <button id="btnClearData" class="hidden" style="padding: 0.5rem 1rem; background: var(--danger, #ef4444); color: white; border: none; border-radius: var(--radius-md); cursor: pointer; font-family: inherit;">Borrar Datos</button>
+                    <span id="data-status" class="status-badge empty">Esperando datos...</span>
+                </div>
+            </header>
+
+            <div class="upload-overlay" id="uploadOverlay">
+                <div class="upload-box">
+                    <i data-lucide="file-spreadsheet" class="upload-icon"></i>
+                    <h2>Sube tu archivo de ventas</h2>
+                    <p>Arrastra tu archivo Excel aquí o haz clic para buscar</p>
+                    <p class="text-sm">Se filtrará automáticamente por Sur 1, Sur 2 y Valles.</p>
+                </div>
+            </div>
+
+            <div class="content-wrapper hidden" id="dashboardView">
+                <!-- KPIs -->
+                <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <h3>Facturación Total</h3>
+                            <i data-lucide="dollar-sign"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiTotalRevenue">$0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <h3>Clientes Activos</h3>
+                            <i data-lucide="users"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiTotalClients">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <h3>Artículos Vendidos</h3>
+                            <i data-lucide="package"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiTotalItems">0</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <h3>Ruta Principal</h3>
+                            <i data-lucide="map"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiTopRoute">-</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <h3>Mejor Cliente</h3>
+                            <i data-lucide="award"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiTopClient" style="font-size: 1.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">-</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-header">
+                            <h3>Producto Estrella</h3>
+                            <i data-lucide="star"></i>
+                        </div>
+                        <div class="kpi-value" id="kpiTopProduct" style="font-size: 1.25rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">-</div>
+                    </div>
+                </div>
+
+                <!-- Charts Row -->
+                <div class="charts-row">
+                    <div class="chart-card">
+                        <h3>Evolución de Facturación Mensual</h3>
+                        <div style="height: 300px; position: relative;">
+                            <canvas id="monthlyRevenueChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Facturación por Ruta</h3>
+                        <div style="height: 300px; position: relative; display: flex; justify-content: center;">
+                            <canvas id="routeRevenueChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Secondary Tables Row -->
+                <div class="tables-row" style="grid-template-columns: 1fr 1fr;">
+                    <div class="table-card">
+                        <h3>Top 10 Clientes por Ruta</h3>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table id="topClientsRouteTable">
+                                <thead style="position: sticky; top: 0; background: var(--bg-surface); z-index: 1;">
+                                    <tr>
+                                        <th>Ruta</th>
+                                        <th>Cliente</th>
+                                        <th>Facturación</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="table-card">
+                        <h3>Productos (Evolución)</h3>
+                        <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                            <table id="productsTrendTable">
+                                <thead style="position: sticky; top: 0; background: var(--bg-surface); z-index: 1;">
+                                    <tr>
+                                        <th style="width: 40px;"></th>
+                                        <th>Producto</th>
+                                        <th>Cant. (Mes)</th>
+                                        <th>vs Mes Ant.</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Detailed Table -->
+                <div class="tables-row" style="grid-template-columns: 1fr;">
+                    <div class="table-card">
+                        <h3>Detalle de Compras por Cliente</h3>
+                        <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                            <table id="mainDetailTable">
+                                <thead style="position: sticky; top: 0; background: var(--bg-surface); z-index: 1;">
+                                    <tr>
+                                        <th>ID Cliente</th>
+                                        <th>Cliente</th>
+                                        <th>Ruta</th>
+                                        <th>Producto</th>
+                                        <th>Cantidad</th>
+                                        <th>Total (Sin IVA)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Drop Modal -->
+                <div id="productDropModal" class="upload-overlay hidden" style="z-index: 1000;">
+                    <div class="upload-box" style="max-width: 600px; background: var(--bg-main); border: 1px solid var(--border-color); text-align: left; padding: 2rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                            <h2 id="modalProductTitle" style="margin: 0; font-size: 1.25rem;">Detalle de Bajas</h2>
+                            <button id="btnCloseModal" style="background: none; border: none; color: var(--text-muted); cursor: pointer;"><i data-lucide="x"></i></button>
+                        </div>
+                        <p style="color: var(--text-muted); margin-bottom: 1rem;">Clientes que redujeron o dejaron de comprar este producto este mes.</p>
+                        <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                            <table id="productDropTable">
+                                <thead style="position: sticky; top: 0; background: var(--bg-surface);">
+                                    <tr>
+                                        <th>Cliente</th>
+                                        <th>Mes Anterior</th>
+                                        <th>Mes Actual</th>
+                                        <th>Diferencia</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-wrapper hidden" id="clientSearchView">
+                <div class="search-section">
+                    <h2>Ficha Dinámica de Cliente</h2>
+                    <div class="search-box">
+                        <input type="text" id="clientSearchInput" placeholder="Ingresa el ID o Nombre del Cliente...">
+                        <button id="btnSearchClient"><i data-lucide="search"></i></button>
+                    </div>
+                </div>
+
+                <!-- Client Presentation Modal -->
+                <div id="clientDetails" class="upload-overlay hidden" style="z-index: 2000; padding: 2rem;">
+                    <div class="upload-box" style="width: 95%; max-width: 1400px; height: 90vh; background: var(--bg-main); border: 1px solid var(--border-color); text-align: left; padding: 2rem; display: flex; flex-direction: column; overflow: hidden; border-radius: var(--radius-lg); box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);">
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2rem; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem;">
+                            <div class="client-info">
+                                <h2 id="cdName" style="font-size: 2.5rem; margin: 0 0 0.5rem 0; color: var(--primary); font-weight: 700;">Nombre del Cliente</h2>
+                                <p id="cdIdLoc" style="font-size: 1.25rem; margin: 0;"><span class="badge" style="font-size: 1rem;">ID: <span id="cdId"></span></span> <span id="cdLocation" style="color: var(--text-muted); margin-left: 1rem;"><i data-lucide="map-pin" style="display:inline;vertical-align:middle;"></i> Localidad</span></p>
+                            </div>
+                            <div class="client-stats" style="text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 1rem;">
+                                <button id="btnClosePresentation" style="background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-main); padding: 0.5rem 1rem; border-radius: var(--radius-md); cursor: pointer; font-size: 1rem; font-weight: 600; transition: all 0.2s;"><i data-lucide="x" style="display:inline-block; vertical-align: middle;"></i> Cerrar Presentación</button>
+                                <div style="display: flex; gap: 2rem; align-items: flex-end;">
+                                    <div class="stat" style="text-align: right;">
+                                        <span class="label" style="font-size: 1.1rem; color: var(--text-muted); display: block;">Mix de Productos</span>
+                                        <span class="val" id="cdMixProductos" style="font-size: 2.5rem; color: var(--warning); font-weight: 700; line-height: 1;">0</span>
+                                    </div>
+                                    <div class="stat" style="text-align: right;">
+                                        <span class="label" style="font-size: 1.1rem; color: var(--text-muted); display: block;">Ticket Promedio</span>
+                                        <span class="val" id="cdAverageTicket" style="font-size: 2.5rem; color: var(--primary); font-weight: 700; line-height: 1;">$0</span>
+                                    </div>
+                                    <div class="stat" style="text-align: right;">
+                                        <span class="label" style="font-size: 1.1rem; color: var(--text-muted); display: block;">Total Facturado (Histórico)</span>
+                                        <span class="val" id="cdTotal" style="font-size: 2.5rem; color: var(--success); font-weight: 700; line-height: 1;">$0</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="flex: 1; overflow-y: auto; padding-right: 1rem;">
+                            <div class="charts-row" style="margin-bottom: 2rem; grid-template-columns: 1fr;">
+                                <div class="chart-card wide" id="clientChartCard" style="border: none; background: var(--bg-surface); box-shadow: none;">
+                                    <h3 style="font-size: 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Evolución Mensual de Compras</h3>
+                                    <div style="height: 350px; position: relative;">
+                                        <canvas id="clientHistoryChart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="table-card" style="border: none; background: var(--bg-surface); box-shadow: none;">
+                                <h3 style="font-size: 1.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">Detalle de Productos Consumidos</h3>
+                                <div class="table-responsive">
+                                    <table id="clientProductsTable" style="font-size: 1.1rem;">
+                                        <thead id="clientProductsTableHead">
+                                            <tr>
+                                                <th>Producto</th>
+                                                <!-- Meses dinámicos se insertarán aquí -->
+                                                <th>Total 6 Meses</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- Populated by JS -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="clientEmptyState" class="empty-state">
+                    <i data-lucide="search"></i>
+                    <p>Busca un cliente para ver su historial y comportamiento de compra.</p>
+                </div>
+            </div>
+
+            <!-- Route Analysis View -->
+            <div class="content-wrapper hidden" id="routeView">
+                <div class="search-section">
+                    <h2>Análisis por Ruta</h2>
+                    <div class="search-box" style="max-width: 400px;">
+                        <select id="routeSelector" style="width: 100%; padding: 1rem 1.5rem; background: var(--bg-surface); color: var(--text-main); border: 1px solid var(--border-color); border-radius: var(--radius-md); font-family: inherit; font-size: 1rem;">
+                            <option value="Sur 1">Sur 1</option>
+                            <option value="Sur 2">Sur 2</option>
+                            <option value="Valles">Valles</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="tables-row" style="grid-template-columns: 1fr;">
+                    <div class="table-card">
+                        <h3>Ranking de Clientes y Tendencia (vs Mes Anterior)</h3>
+                        <div class="table-responsive">
+                            <table id="routeClientsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Ranking</th>
+                                        <th>Cliente</th>
+                                        <th>Mes Actual</th>
+                                        <th>Mes Anterior</th>
+                                        <th>Tendencia</th>
+                                        <th>Estado</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./service-worker.js')
+                    .then(reg => console.log('Service Worker registrado', reg))
+                    .catch(err => console.log('Error al registrar Service Worker', err));
+            });
+        }
+    </script>
+</body>
+</html>

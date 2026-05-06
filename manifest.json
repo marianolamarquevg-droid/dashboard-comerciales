@@ -1,0 +1,22 @@
+{
+  "name": "Vía Comerciales - Dashboard",
+  "short_name": "Vía Comerciales",
+  "description": "Dashboard de análisis de ventas para comerciales de Vía.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#022c22",
+  "theme_color": "#22c55e",
+  "icons": [
+    {
+      "src": "logo_raw.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "logo_raw.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
